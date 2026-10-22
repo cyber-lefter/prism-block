@@ -96,6 +96,12 @@ func _rebuild() -> void:
 	for c in list.get_children():
 		c.queue_free()
 
+	_section("No ads")
+	# Placeholder until in-app purchases are set up; Save.data["ads_removed"] then turns off interstitials.
+	var remove := UI.button("Soon", Color("2c2766"), 28, 84)
+	remove.disabled = true
+	_row(null, "Remove ads", "No more ads between games. Rewarded ads you choose stay.", remove)
+
 	_section("Themes")
 	for raw in Themes.LIST:
 		var id: String = raw["id"]

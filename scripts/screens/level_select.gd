@@ -1,8 +1,9 @@
 class_name LevelSelect
 extends Control
-## Adventure map: a grid of levels with stars. Locked levels are greyed out.
+## One island region: a grid of its levels with stars. Locked levels are greyed out.
 
 var router
+var region := 0
 
 
 func _ready() -> void:
@@ -24,9 +25,9 @@ func _ready() -> void:
 	header.add_theme_constant_override("separation", 16)
 	col.add_child(header)
 	var back := UI.button("Back", Color("2c2766"), 28, 80)
-	back.pressed.connect(func() -> void: router.show_menu())
+	back.pressed.connect(func() -> void: router.show_island())
 	header.add_child(back)
-	var title := UI.label("Adventure", 54, Color.WHITE, 12)
+	var title := UI.label(str(Levels.REGIONS[region]["name"]), 46, Color.WHITE, 12)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	header.add_child(Widgets.CoinPill.new())
@@ -55,15 +56,16 @@ func _ready() -> void:
 	var sv := VBoxContainer.new()
 	sv.add_theme_constant_override("separation", 4)
 	soon.add_child(sv)
-	sv.add_child(UI.label("More levels coming soon", 36, Color("ffd23f")))
-	var sub := UI.label("New worlds and mechanics are on the way.", 24, Color(0.75, 0.72, 0.95))
+	sv.add_child(UI.label("Next region coming soon", 36, Color("ffd23f")))
+	var sub := UI.label("New lands and mechanics are on the way. Finish this one to be ready.", 24, Color(0.75, 0.72, 0.95))
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sv.add_child(sub)
 	stack.add_child(soon)
 
 	var unlocked := Save.unlocked()
 	var current: Control = null
-	for n in range(1, Levels.COUNT + 1):
+	var reg: Dictionary = Levels.REGIONS[region]
+	for n in range(int(reg["first"]), int(reg["last"]) + 1):
 		var stars := Save.stars(n)
 		var open := n <= unlocked
 		var color := Color("2fbf71") if stars > 0 else (Color("7b5cff") if open else Color("2c2766"))
@@ -87,4 +89,4 @@ func _ready() -> void:
 
 
 func go_back() -> void:
-	router.show_menu()
+	router.show_island()

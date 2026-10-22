@@ -23,6 +23,10 @@ var data := {
 	"games_played": 0,
 	"ad_coins_day": "",
 	"ad_coins_count": 0,
+	"streak": 0,
+	"streak_day": "",
+	"chests": [],
+	"ads_removed": false,
 }
 
 
@@ -120,6 +124,79 @@ func stars(level: int) -> int:
 func set_stars(level: int, s: int) -> void:
 	data["stars"][str(level)] = maxi(s, stars(level))
 	save()
+
+
+# --- daily streak ---
+const STREAK_REWARDS := {3: {"coins": 50}, 7: {"coins": 100, "hammer": 2}}
+
+
+static func yesterday() -> String:
+	return Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(today()) - 86400)
+
+
+## Days in a row with a finished Daily challenge; 0 once a day has been missed.
+func streak() -> int:
+	var day := str(data["streak_day"])
+	return int(data["streak"]) if day == today() or day == yesterday() else 0
+
+
+func played_daily_today() -> bool:
+	return str(data["streak_day"]) == today()
+
+
+## Counts today's Daily challenge toward the streak (once per day) and pays any reward.
+## The reward table repeats every 7 days. Returns the reward given, or {}.
+func note_daily_played() -> Dictionary:
+	if played_daily_today():
+		return {}
+	data["streak"] = streak() + 1
+	data["streak_day"] = today()
+	var day := (int(data["streak"]) - 1) % 7 + 1
+	var reward: Dictionary = STREAK_REWARDS.get(day, {})
+	for k in reward:
+		if k == "coins":
+			add_coins(int(reward[k]))
+		else:
+			add_power(k, int(reward[k]))
+	save()
+	return reward
+
+
+# --- star chests ---
+func region_stars(r: int) -> int:
+	var reg: Dictionary = Levels.REGIONS[r]
+	var total := 0
+	for n in range(int(reg["first"]), int(reg["last"]) + 1):
+		total += stars(n)
+	return total
+
+
+func chest_opened(id: String) -> bool:
+	return data["chests"].has(id)
+
+
+## Pays out a chest's contents. A theme the player already owns becomes coins instead.
+func open_chest(id: String, reward: Dictionary) -> Dictionary:
+	var given := {}
+	if chest_opened(id):
+		return given
+	data["chests"].append(id)
+	for k in reward:
+		if k == "theme":
+			if owns_theme(str(reward[k])):
+				given["coins"] = int(given.get("coins", 0)) + 300
+			else:
+				data["owned_themes"].append(str(reward[k]))
+				given["theme"] = reward[k]
+		elif k == "coins":
+			given["coins"] = int(given.get("coins", 0)) + int(reward[k])
+		else:
+			add_power(k, int(reward[k]))
+			given[k] = reward[k]
+	if given.has("coins"):
+		add_coins(int(given["coins"]))
+	save()
+	return given
 
 
 # --- power-ups ---

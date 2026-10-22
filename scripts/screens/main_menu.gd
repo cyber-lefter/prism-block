@@ -53,11 +53,14 @@ func _ready() -> void:
 	if lvl >= Levels.COUNT and Save.stars(Levels.COUNT) > 0:
 		adv_sub = "All done! More levels soon"
 	var adventure := UI.menu_button("Adventure", adv_sub, Color("2fbf71"))
-	adventure.pressed.connect(func() -> void: router.show_levels())
+	adventure.pressed.connect(func() -> void: router.show_island())
 	col.add_child(adventure)
 
 	var daily_best := Save.daily_best()
 	var daily_sub := "New puzzle today" if daily_best < 0 else "Today's best " + UI.fmt(daily_best)
+	var streak := Save.streak()
+	if streak > 0:
+		daily_sub = ("%d-day streak. " % streak) + ("Done today" if Save.played_daily_today() else "Keep it going!")
 	var daily := UI.menu_button("Daily challenge", daily_sub, Color("ff9a3c"))
 	daily.pressed.connect(func() -> void: router.start_game("daily"))
 	col.add_child(daily)

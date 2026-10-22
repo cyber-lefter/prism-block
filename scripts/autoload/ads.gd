@@ -19,6 +19,9 @@ func show_rewarded(placement: String, on_reward: Callable) -> void:
 ## Called between games. Shows an interstitial now and then, never during play.
 func game_finished(on_done: Callable) -> void:
 	_games_since_interstitial += 1
+	if bool(Save.data.get("ads_removed", false)):
+		on_done.call()
+		return
 	var played := int(Save.data.get("games_played", 0))
 	if played > FREE_GAMES_BEFORE_INTERSTITIALS and _games_since_interstitial >= INTERSTITIAL_EVERY:
 		_games_since_interstitial = 0

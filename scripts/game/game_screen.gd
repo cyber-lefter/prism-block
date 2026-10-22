@@ -333,6 +333,20 @@ func _show_pause() -> void:
 func go_back() -> void:
 	if dialog_kind == "pause":
 		_close_dialog()
+	elif dialog_kind == "intro":
+		# Backing out before the first move: return to wherever the player came from.
+		if mode == "adventure":
+			router.show_levels(Levels.region_of(level_n))
+		else:
+			router.show_menu()
+	elif dialog_kind == "end":
+		# Same as the last button on the end screen (Menu or Levels), so coins are still paid out.
+		_finish_run(func() -> void:
+			if mode == "adventure":
+				router.show_levels(Levels.region_of(level_n))
+			else:
+				router.show_menu()
+		)
 	elif dialog == null:
 		_show_pause()
 
@@ -392,10 +406,27 @@ func _end_daily() -> void:
 	var body: Array = [["Score", 26, c_muted], [UI.fmt(s), 84, Color.WHITE]]
 	body.append(["New best today!" if is_best and not first else "Today's best " + UI.fmt(Save.daily_best()), 30, c_gold])
 	body.append(["+%d coins" % (_run_coins() + bonus), 28, c_gold])
+	var reward := Save.note_daily_played()
+	var st := Save.streak()
+	body.append(["Streak: %d day%s in a row" % [st, "" if st == 1 else "s"], 30, Color.WHITE])
+	if not reward.is_empty():
+		body.append([_reward_text(reward), 28, c_gold])
 	_dialog("end", "Daily done", body, [
 		["Try again", c_purple, func() -> void: _finish_run(func() -> void: router.start_game("daily"), bonus)],
 		["Menu", c_panel, func() -> void: _finish_run(func() -> void: router.show_menu(), bonus)],
 	])
+
+
+static func _reward_text(r: Dictionary) -> String:
+	var parts: Array = []
+	for k in r:
+		if k == "coins":
+			parts.append("+%d coins" % int(r[k]))
+		elif k == "theme":
+			parts.append("%s theme" % str(Themes.get_theme(str(r[k]))["name"]))
+		else:
+			parts.append("+%d %s" % [int(r[k]), k])
+	return "Streak reward: " + ", ".join(parts)
 
 
 func _end_level_win() -> void:
@@ -417,7 +448,7 @@ func _end_level_win() -> void:
 		buttons.append(["Next level", c_green, func() -> void: _finish_run(func() -> void: router.start_game("adventure", level_n + 1))])
 	else:
 		body.append(["You finished every level! More levels coming soon.", 30, Color.WHITE])
-	buttons.append(["Levels", c_panel, func() -> void: _finish_run(func() -> void: router.show_levels())])
+	buttons.append(["Levels", c_panel, func() -> void: _finish_run(func() -> void: router.show_levels(Levels.region_of(level_n)))])
 	_dialog("end", "Level %d complete!" % level_n, body, buttons, stars)
 	# Celebration: confetti over everything, and the coin line counts up after the stars land.
 	var confetti := Widgets.Confetti.new()
@@ -441,7 +472,7 @@ func _end_level_fail() -> void:
 	if not view.revived:
 		buttons.append(["Watch ad to revive", c_green, _revive])
 	buttons.append(["Try again", c_purple, func() -> void: _finish_run(func() -> void: router.start_game("adventure", level_n))])
-	buttons.append(["Levels", c_panel, func() -> void: _finish_run(func() -> void: router.show_levels())])
+	buttons.append(["Levels", c_panel, func() -> void: _finish_run(func() -> void: router.show_levels(Levels.region_of(level_n)))])
 	_dialog("end", "Out of space", body, buttons)
 
 
