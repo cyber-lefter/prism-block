@@ -23,6 +23,8 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	router.show_island()
+	await get_tree().process_frame
 	router.show_levels()
 	await get_tree().process_frame
 	router.show_shop()

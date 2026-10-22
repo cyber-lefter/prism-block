@@ -53,7 +53,7 @@ func _ready() -> void:
 	if lvl >= Levels.COUNT and Save.stars(Levels.COUNT) > 0:
 		adv_sub = "All done! More levels soon"
 	var adventure := UI.menu_button("Adventure", adv_sub, Color("2fbf71"))
-	adventure.pressed.connect(func() -> void: router.show_levels())
+	adventure.pressed.connect(func() -> void: router.show_island())
 	col.add_child(adventure)
 
 	var daily_best := Save.daily_best()

@@ -5,6 +5,36 @@ extends RefCounted
 
 const COUNT := 50
 
+## Island regions on the Adventure map, bottom to top. Each opens once the previous one is finished.
+## Regions without levels yet show as locked "?" areas. To ship one: give it a name and a level
+## range that continues the numbering, and raise COUNT.
+const REGIONS := [
+	{"name": "Prism Meadows", "first": 1, "last": 50, "land": "6fd16b", "pos": Vector2(0.38, 0.76)},
+	{"name": "", "first": 0, "last": 0, "land": "e9f4ff", "pos": Vector2(0.70, 0.66)},
+	{"name": "", "first": 0, "last": 0, "land": "f2c46b", "pos": Vector2(0.28, 0.52)},
+	{"name": "", "first": 0, "last": 0, "land": "2f9e6a", "pos": Vector2(0.70, 0.38)},
+	{"name": "", "first": 0, "last": 0, "land": "b48cff", "pos": Vector2(0.32, 0.24)},
+	{"name": "", "first": 0, "last": 0, "land": "8a5a4a", "pos": Vector2(0.58, 0.10)},
+]
+
+
+static func region_ready(r: int) -> bool:
+	return int(REGIONS[r]["last"]) > 0
+
+
+## A region is open when it has levels and every level before it has been beaten.
+static func region_open(r: int) -> bool:
+	if not region_ready(r):
+		return false
+	return r == 0 or Save.stars(int(REGIONS[r - 1]["last"])) > 0
+
+
+static func region_of(n: int) -> int:
+	for r in REGIONS.size():
+		if region_ready(r) and n >= int(REGIONS[r]["first"]) and n <= int(REGIONS[r]["last"]):
+			return r
+	return 0
+
 
 static func goal_text(lv: Dictionary) -> String:
 	match lv["type"]:
@@ -45,13 +75,13 @@ static func get_level(n: int) -> Dictionary:
 		t = "ice"
 	var lv := {
 		"n": n, "type": t, "target": 0, "bombs": n >= 16,
-		"base": 0.1 + 0.3 * n / float(COUNT), "par": 12 + int(n * 0.35),
+		"base": 0.1 + 0.22 * n / float(COUNT), "par": 0,
 		"intro": _intro(n), "cells": [],
 	}
 
 	# Symmetric starting pattern, denser toward the bottom.
 	var grid := {}
-	var fill := 0.1 + 0.16 * minf(1.0, n / 40.0)
+	var fill := 0.1 + 0.14 * minf(1.0, n / 40.0)
 	if t == "score":
 		fill *= 0.6
 	elif t == "gems" or t == "ice":
@@ -81,19 +111,22 @@ static func get_level(n: int) -> Dictionary:
 	_shuffle(blocks, rng)
 	match t:
 		"score":
-			lv["target"] = 250 + n * 45
+			# Gentler climb after level 30, where the bot's win rate dropped off.
+			lv["target"] = 250 + 38 * mini(n, 30) + 25 * maxi(0, n - 30)
 		"lines":
-			lv["target"] = 5 + int(n / 4.0)
+			lv["target"] = 5 + int(n / 5.0)
 		"gems":
-			var want := mini(3 + int(n / 6.0), blocks.size())
+			var want := mini(3 + int(n / 7.0), blocks.size())
 			for k in want:
 				grid[blocks[k]]["kind"] = "gem"
 			lv["target"] = want
 		"ice":
-			var want := mini(4 + int(n / 5.0), blocks.size())
+			var want := mini(4 + int(n / 7.0), blocks.size())
 			for k in want:
-				grid[blocks[k]]["ice"] = 2 if n >= 30 and rng.randf() < 0.4 else 1
+				grid[blocks[k]]["ice"] = 2 if n >= 30 and rng.randf() < 0.3 else 1
 			lv["target"] = want
+
+	lv["par"] = par_for(t, int(lv["target"]))
 
 	var cells: Array = []
 	for key in grid.keys():
@@ -101,6 +134,21 @@ static func get_level(n: int) -> Dictionary:
 		cells.append({"i": key, "color": c["color"], "kind": c["kind"], "ice": c["ice"]})
 	lv["cells"] = cells
 	return lv
+
+
+## Moves allowed for 3 stars. Tuned from bot play (tests/balance.gd): roughly 80% of the moves
+## a simple greedy bot needs, so a careful player can get 3 stars and most players get 2.
+static func par_for(type: String, target: int) -> int:
+	match type:
+		"score":
+			return roundi(1.4 * sqrt(target))
+		"lines":
+			return roundi(12 + 1.5 * target)
+		"gems":
+			return roundi(20 + 1.6 * target)
+		"ice":
+			return roundi(10 + 4.0 * target)
+	return 20
 
 
 ## No line may start full. Removes one plain block from any full row or column.
