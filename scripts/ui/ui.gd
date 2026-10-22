@@ -158,6 +158,7 @@ static func safe_insets(ctrl: Control) -> Vector2:
 ## and stops that button from firing once the list has started moving.
 static func touch_scroll(scroll: ScrollContainer) -> void:
 	scroll.scroll_deadzone = 18
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.add_child(TouchScroll.new(), false, Node.INTERNAL_MODE_FRONT)
 
 

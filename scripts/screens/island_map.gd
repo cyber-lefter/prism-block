@@ -28,20 +28,26 @@ func _on_region(r: int) -> void:
 
 func _on_chest(c: int) -> void:
 	var chest: Dictionary = Levels.CHESTS[c]
-	var id := Levels.chest_id(c)
-	var need := int(chest["stars"])
-	var have := Save.region_stars(int(chest["region"]))
-	if Save.chest_opened(id):
-		view.toast(100 + c, "Already opened")
-	elif have < need:
-		view.toast(100 + c, "%d / %d stars" % [have, need])
-	else:
-		var given := Save.open_chest(id, chest["reward"])
-		view.toast(100 + c, GameScreen._reward_text(given).replace("Streak reward: ", ""), 2.6)
+	var cost := int(chest["cost"])
+	if chest["id"] == "dusk":
+		var owned := bool(Save.data["island_dusk"])
+		var look := Save.buy_or_toggle_dusk(cost)
+		if look == "":
+			view.toast(100 + c, "Need %d stars" % cost)
+			return
+		view.toast(100 + c, "Dusk island!" if not owned else ("Dusk" if look == "dusk" else "Daytime"))
 		view.burst(c)
-		Sfx.play("coin")
-		Sfx.play_later("win", 0.15)
-		Sfx.vibrate(60, true, 0.9)
+		Sfx.play("power")
+		return
+	var got := Save.buy_chest(str(chest["id"]), cost)
+	if got.is_empty():
+		view.toast(100 + c, "Need %d stars" % cost)
+		return
+	view.toast(100 + c, GameScreen._reward_text(got).replace("Streak reward: ", ""), 2.6)
+	view.burst(c)
+	Sfx.play("coin")
+	Sfx.play_later("win", 0.15)
+	Sfx.vibrate(60, true, 0.9)
 
 
 func go_back() -> void:
@@ -53,9 +59,11 @@ class IslandView extends Control:
 	signal region_tapped(r: int)
 	signal chest_tapped(c: int)
 
-	const SEA_TOP := Color("1f6fb8")
-	const SEA_BOTTOM := Color("0d3b74")
-	const SAND := Color("f3d58c")
+	# Daytime and dusk colors: sea top, sea bottom, sand, grass, shallow water.
+	const LOOKS := {
+		"day": [Color("1f6fb8"), Color("0d3b74"), Color("f3d58c"), Color("4fae5a"), Color(0.45, 0.85, 0.95, 0.35)],
+		"dusk": [Color("4a2f7a"), Color("150d33"), Color("e3a17c"), Color("3c7f5e"), Color(1.0, 0.6, 0.7, 0.3)],
+	}
 	const INK := Color(0.08, 0.05, 0.2)
 
 	var t := 0.0
@@ -162,11 +170,21 @@ class IslandView extends Control:
 		var u := _unit()
 		var rect := Rect2(Vector2.ZERO, size)
 		var sea := StyleBoxFlat.new()
-		sea.bg_color = SEA_BOTTOM
+		var pal: Array = LOOKS.get(look(), LOOKS["day"])
+		var sea_top: Color = pal[0]
+		var sea_bottom: Color = pal[1]
+		sea.bg_color = sea_bottom
 		sea.set_corner_radius_all(int(40 * u))
 		draw_style_box(sea, rect)
 		draw_polygon(PackedVector2Array([Vector2(12, 12), Vector2(size.x - 12, 12), size - Vector2(12, 12), Vector2(12, size.y - 12)]),
-			PackedColorArray([Color(SEA_TOP, 0.9), Color(SEA_TOP, 0.9), Color(SEA_BOTTOM, 0.0), Color(SEA_BOTTOM, 0.0)]))
+			PackedColorArray([Color(sea_top, 0.9), Color(sea_top, 0.9), Color(sea_bottom, 0.0), Color(sea_bottom, 0.0)]))
+		if look() == "dusk":
+			# Moon glow and twinkling stars over the water.
+			BlockArt.draw_glow(self, Vector2(size.x * 0.84, size.y * 0.08), 160.0 * u, Color(1, 0.85, 0.7, 0.35))
+			draw_circle(Vector2(size.x * 0.84, size.y * 0.08), 26.0 * u, Color("ffe9c4"))
+			for w in waves:
+				var tw := 0.5 + 0.5 * sin(t * 2.0 + float(w["ph"]) * 3.0)
+				BlockArt.draw_sparkle(self, Vector2(fposmod(w["p"].x + 0.37, 1.0) * size.x, fposmod(w["p"].y + 0.21, 1.0) * size.y), 7.0 * u * tw, Color(1, 1, 1, 0.5 * tw))
 		for w in waves:
 			var p := Vector2(w["p"].x * size.x, w["p"].y * size.y)
 			var a := 0.25 + 0.2 * sin(t * 1.3 + float(w["ph"]))
@@ -183,6 +201,7 @@ class IslandView extends Control:
 		_draw_islet(u)
 		for c in Levels.CHESTS.size():
 			_draw_chest(c, u)
+		_draw_star_balance(u)
 		_draw_boat(u)
 
 	func _poly(unit_pts: PackedVector2Array, offset := Vector2.ZERO, grow := 1.0, center := Vector2(0.5, 0.47)) -> PackedVector2Array:
@@ -194,12 +213,16 @@ class IslandView extends Control:
 	func _draw_island(u: float) -> void:
 		# Shallow-water ring with a slow pulse, then the beach, then the grass.
 		var pulse := 1.07 + 0.008 * sin(t * 1.2)
-		draw_colored_polygon(_poly(shore, Vector2.ZERO, pulse), Color(0.45, 0.85, 0.95, 0.35))
-		draw_colored_polygon(_poly(shore, Vector2(0, 10 * u), 1.0), SAND.darkened(0.25))
-		draw_colored_polygon(_poly(shore), SAND)
-		draw_colored_polygon(_poly(shore, Vector2.ZERO, 0.9), Color("4fae5a"))
+		var pal: Array = LOOKS.get(look(), LOOKS["day"])
+		var sand: Color = pal[2]
+		draw_colored_polygon(_poly(shore, Vector2.ZERO, pulse), pal[4])
+		draw_colored_polygon(_poly(shore, Vector2(0, 10 * u), 1.0), sand.darkened(0.25))
+		draw_colored_polygon(_poly(shore), sand)
+		draw_colored_polygon(_poly(shore, Vector2.ZERO, 0.9), pal[3])
 		for i in Levels.REGIONS.size():
 			var land := Color(str(Levels.REGIONS[i]["land"]))
+			if look() == "dusk":
+				land = land.lerp(Color("5a3d8a"), 0.3)
 			var c: Vector2 = Levels.REGIONS[i]["pos"]
 			draw_colored_polygon(_poly(blobs[i], Vector2(0, 6 * u), 1.0, c), land.darkened(0.3))
 			draw_colored_polygon(_poly(blobs[i], Vector2.ZERO, 1.0, c), land)
@@ -317,43 +340,58 @@ class IslandView extends Control:
 		for k in 32:
 			var a := TAU * k / 32.0
 			pts.append(c + Vector2(cos(a) * 0.29, sin(a) * 0.06 * (1.0 + 0.15 * sin(a * 3.0))))
-		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.12, c), Color(0.45, 0.85, 0.95, 0.35))
-		draw_colored_polygon(_poly(pts, Vector2(0, 8 * u), 1.0, c), SAND.darkened(0.25))
-		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.0, c), SAND)
+		var pal: Array = LOOKS.get(look(), LOOKS["day"])
+		var sand: Color = pal[2]
+		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.12, c), pal[4])
+		draw_colored_polygon(_poly(pts, Vector2(0, 8 * u), 1.0, c), sand.darkened(0.25))
+		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.0, c), sand)
 
 	func _draw_chest(c: int, u: float) -> void:
 		var chest: Dictionary = Levels.CHESTS[c]
 		var p := _xf(chest["pos"])
-		var r := int(chest["region"])
-		if not Levels.region_open(r):
-			return
-		var opened := Save.chest_opened(Levels.chest_id(c))
-		var ready := not opened and Save.region_stars(r) >= int(chest["stars"])
+		var cost := int(chest["cost"])
+		var dusk_item: bool = chest["id"] == "dusk"
+		var owned := dusk_item and bool(Save.data["island_dusk"])
+		var ready := not owned and Save.star_balance() >= cost
 		var s := u * (1.0 + 0.06 * sin(t * 5.0) if ready else u)
 		if ready:
 			BlockArt.draw_glow(self, p, 70.0 * u, Color(1, 0.85, 0.3, 0.5 + 0.2 * sin(t * 4.0)))
 		if bursts.has(c) and t - float(bursts[c]) < 0.8:
 			var k := (t - float(bursts[c])) / 0.8
 			BlockArt.draw_glow(self, p, (60.0 + 140.0 * k) * u, Color(1, 0.9, 0.5, 0.8 * (1.0 - k)))
-		var wood := Color("b0703a") if not opened else Color("8a5a2b")
-		draw_rect(Rect2(p + Vector2(-22, -4) * s, Vector2(44, 26) * s), Color(0, 0, 0, 0.25))
-		draw_rect(Rect2(p + Vector2(-22, -8) * s, Vector2(44, 26) * s), wood)
-		if opened:
-			# Lid flipped back, empty inside.
-			draw_rect(Rect2(p + Vector2(-20, -6) * s, Vector2(40, 6) * s), Color("3a2412"))
-			draw_rect(Rect2(p + Vector2(-22, -26) * s, Vector2(44, 12) * s), wood.darkened(0.2))
+		if dusk_item:
+			# A crescent moon on a little post.
+			draw_line(p + Vector2(0, 14) * s, p + Vector2(0, -6) * s, Color("8a5a2b"), 4.0 * s)
+			draw_circle(p + Vector2(0, -18) * s, 16.0 * s, Color("ffe9a8"))
+			draw_circle(p + Vector2(7, -22) * s, 13.0 * s, Color("2c2766") if look() == "day" else Color("1a1240"))
 		else:
-			draw_rect(Rect2(p + Vector2(-24, -20) * s, Vector2(48, 14) * s), wood.lightened(0.1))
-			draw_rect(Rect2(p + Vector2(-24, -9) * s, Vector2(48, 4) * s), Color("ffd23f"))
-			draw_rect(Rect2(p + Vector2(-5, -12) * s, Vector2(10, 12) * s), Color("ffd23f"))
-		# Star cost tag underneath.
-		var tag := "Open" if ready else ("Done" if opened else str(int(chest["stars"])))
-		_pill(tag, p + Vector2(0, 38 * u), 20.0 * u, Color(INK, 0.85) if not ready else Color("ffd23f"), Color.WHITE if not ready else INK)
-		if not ready and not opened:
+			var big: bool = chest["id"] == "big"
+			var k := 1.2 if big else 1.0
+			var wood := Color("9b4fd6") if big else Color("b0703a")
+			draw_rect(Rect2(p + Vector2(-22, -4) * s * k, Vector2(44, 26) * s * k), Color(0, 0, 0, 0.25))
+			draw_rect(Rect2(p + Vector2(-22, -8) * s * k, Vector2(44, 26) * s * k), wood)
+			draw_rect(Rect2(p + Vector2(-24, -20) * s * k, Vector2(48, 14) * s * k), wood.lightened(0.1))
+			draw_rect(Rect2(p + Vector2(-24, -9) * s * k, Vector2(48, 4) * s * k), Color("ffd23f"))
+			draw_rect(Rect2(p + Vector2(-5, -12) * s * k, Vector2(10, 12) * s * k), Color("ffd23f"))
+		# Price tag underneath, or the current look once the dusk island is owned.
+		var tag := str(cost)
+		if owned:
+			tag = "Dusk" if look() == "dusk" else "Day"
+		_pill(tag, p + Vector2(0, 38 * u), 20.0 * u, Color("ffd23f") if ready else Color(INK, 0.85), INK if ready else Color.WHITE)
+		if not owned:
 			_star(p + Vector2(-_tag_w(tag, 20.0 * u) / 2.0 - 10.0 * u, 38 * u), 9.0 * u)
 		if toasts.has(100 + c):
 			var a := clampf(toasts[100 + c] / 0.3, 0.0, 1.0)
-			_pill(str(get_meta("toast_%d" % (100 + c), "")), p + Vector2(clampf(0.0, -p.x + 160 * u, size.x - p.x - 160 * u), -46 * u), 22.0 * u, Color(Color.WHITE, a), Color(INK, a))
+			_pill(str(get_meta("toast_%d" % (100 + c), "")), p + Vector2(clampf(0.0, -p.x + 160 * u, size.x - p.x - 160 * u), -50 * u), 22.0 * u, Color(Color.WHITE, a), Color(INK, a))
+
+	func _draw_star_balance(u: float) -> void:
+		var p := _xf(Vector2(0.58, 1.135))
+		var txt := "%d to spend" % Save.star_balance()
+		_pill(txt, p, 22.0 * u, Color(INK, 0.85), Color.WHITE)
+		_star(p + Vector2(-_tag_w(txt, 22.0 * u) / 2.0 - 12.0 * u, 0), 11.0 * u)
+
+	func look() -> String:
+		return str(Save.data.get("island_look", "day"))
 
 	func _tag_w(s: String, fs: float) -> float:
 		return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs)).x + fs * 1.2

@@ -25,7 +25,9 @@ var data := {
 	"ad_coins_count": 0,
 	"streak": 0,
 	"streak_day": "",
-	"chests": [],
+	"stars_spent": 0,
+	"island_dusk": false,
+	"island_look": "day",
 	"ads_removed": false,
 }
 
@@ -162,7 +164,7 @@ func note_daily_played() -> Dictionary:
 	return reward
 
 
-# --- star chests ---
+# --- star shop on the island ---
 func region_stars(r: int) -> int:
 	var reg: Dictionary = Levels.REGIONS[r]
 	var total := 0
@@ -171,32 +173,61 @@ func region_stars(r: int) -> int:
 	return total
 
 
-func chest_opened(id: String) -> bool:
-	return data["chests"].has(id)
+## Stars earned and not yet spent. Getting more stars on an old level adds to it.
+func star_balance() -> int:
+	var total := 0
+	for r in Levels.REGIONS.size():
+		if Levels.region_ready(r):
+			total += region_stars(r)
+	return total - int(data["stars_spent"])
 
 
-## Pays out a chest's contents. A theme the player already owns becomes coins instead.
-func open_chest(id: String, reward: Dictionary) -> Dictionary:
-	var given := {}
-	if chest_opened(id):
-		return given
-	data["chests"].append(id)
-	for k in reward:
-		if k == "theme":
-			if owns_theme(str(reward[k])):
-				given["coins"] = int(given.get("coins", 0)) + 300
-			else:
-				data["owned_themes"].append(str(reward[k]))
-				given["theme"] = reward[k]
-		elif k == "coins":
-			given["coins"] = int(given.get("coins", 0)) + int(reward[k])
-		else:
-			add_power(k, int(reward[k]))
-			given[k] = reward[k]
-	if given.has("coins"):
-		add_coins(int(given["coins"]))
+## Spends stars on a chest and returns what was inside: {"coins": n, power-up: n, "theme": id}.
+## Returns {} if the balance is too low.
+func buy_chest(kind: String, cost: int) -> Dictionary:
+	if star_balance() < cost:
+		return {}
+	data["stars_spent"] = int(data["stars_spent"]) + cost
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var powers := ["hammer", "rotate", "swap", "undo"]
+	var got := {}
+	if kind == "small":
+		got["coins"] = rng.randi_range(6, 12) * 10
+		if rng.randf() < 0.5:
+			got[powers[rng.randi_range(0, 3)]] = 1
+	else:
+		got["coins"] = rng.randi_range(15, 25) * 10
+		for k in 2:
+			var p: String = powers[rng.randi_range(0, 3)]
+			got[p] = int(got.get(p, 0)) + 1
+		# Now and then a theme the player doesn't have yet.
+		if rng.randf() < 0.25:
+			for t in Themes.LIST:
+				if not owns_theme(str(t["id"])):
+					data["owned_themes"].append(str(t["id"]))
+					got["theme"] = str(t["id"])
+					break
+	for k in got:
+		if k != "coins" and k != "theme":
+			add_power(k, int(got[k]))
+	add_coins(int(got["coins"]))
 	save()
-	return given
+	return got
+
+
+## The dusk island look: bought once with stars, then switched on and off for free.
+func buy_or_toggle_dusk(cost: int) -> String:
+	if not bool(data["island_dusk"]):
+		if star_balance() < cost:
+			return ""
+		data["stars_spent"] = int(data["stars_spent"]) + cost
+		data["island_dusk"] = true
+		data["island_look"] = "dusk"
+	else:
+		data["island_look"] = "day" if str(data["island_look"]) == "dusk" else "dusk"
+	save()
+	return str(data["island_look"])
 
 
 # --- power-ups ---
