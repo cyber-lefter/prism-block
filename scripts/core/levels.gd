@@ -130,13 +130,13 @@ static func get_level(n: int) -> Dictionary:
 			lv["target"] = 5 + int(n / 5.0)
 		"gems":
 			var want := mini(3 + int(n / 7.0), blocks.size())
-			for k in want:
-				grid[blocks[k]]["kind"] = "gem"
+			for i in _pick_spread(grid, blocks, want):
+				grid[i]["kind"] = "gem"
 			lv["target"] = want
 		"ice":
 			var want := mini(4 + int(n / 7.0), blocks.size())
-			for k in want:
-				grid[blocks[k]]["ice"] = 2 if n >= 30 and rng.randf() < 0.3 else 1
+			for i in _pick_spread(grid, blocks, want):
+				grid[i]["ice"] = 2 if n >= 30 and rng.randf() < 0.3 else 1
 			lv["target"] = want
 
 	lv["par"] = par_for(t, int(lv["target"]))
@@ -162,6 +162,38 @@ static func par_for(type: String, target: int) -> int:
 		"ice":
 			return roundi(10 + 4.0 * target)
 	return 20
+
+
+## Picks goal blocks (gems, ice) that are hard to grab all at once: blocks in the emptiest
+## rows and columns first, and no two sharing a row or column while that is possible.
+## Otherwise a lucky first piece can finish a level by completing one nearly full line.
+static func _pick_spread(grid: Dictionary, blocks: Array, want: int) -> Array:
+	var fill := {}
+	for line in 16:
+		var c := 0
+		for j in 8:
+			if grid.has(line * 8 + j if line < 8 else j * 8 + (line - 8)):
+				c += 1
+		fill[line] = c
+	var ranked := blocks.duplicate()
+	ranked.sort_custom(func(a, b):
+		return maxi(fill[a / 8], fill[8 + a % 8]) < maxi(fill[b / 8], fill[8 + b % 8]))
+	var out: Array = []
+	var rows := {}
+	var cols := {}
+	for i in ranked:
+		if out.size() >= want:
+			break
+		if not rows.has(i / 8) and not cols.has(i % 8):
+			out.append(i)
+			rows[i / 8] = true
+			cols[i % 8] = true
+	for i in ranked:
+		if out.size() >= want:
+			break
+		if not out.has(i):
+			out.append(i)
+	return out
 
 
 ## No line may start full. Removes one plain block from any full row or column.

@@ -13,7 +13,10 @@ func _ready() -> void:
 	get_tree().root.add_child.call_deferred(router)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var only := OS.get_environment("LEVELS")  # e.g. LEVELS=3,7,11 to check just those
 	for n in range(1, Levels.COUNT + 1):
+		if only != "" and not only.split(",").has(str(n)):
+			continue
 		var lv := Levels.get_level(n)
 		var wins: Array = []
 		for r in runs:
