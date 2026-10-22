@@ -18,6 +18,19 @@ const REGIONS := [
 ]
 
 
+## Star chests on the map, per region: open once the region's stars reach the number.
+## "pos" is where the chest sits on the map (the little treasure islet below the main island).
+const CHESTS := [
+	{"region": 0, "stars": 30, "reward": {"coins": 100}, "pos": Vector2(0.40, 1.03)},
+	{"region": 0, "stars": 75, "reward": {"coins": 200, "hammer": 2, "undo": 2}, "pos": Vector2(0.58, 1.045)},
+	{"region": 0, "stars": 150, "reward": {"coins": 300, "theme": "sunset"}, "pos": Vector2(0.76, 1.03)},
+]
+
+
+static func chest_id(c: int) -> String:
+	return "r%d_%d" % [int(CHESTS[c]["region"]), int(CHESTS[c]["stars"])]
+
+
 static func region_ready(r: int) -> bool:
 	return int(REGIONS[r]["last"]) > 0
 

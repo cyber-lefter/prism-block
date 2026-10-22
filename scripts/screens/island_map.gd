@@ -13,6 +13,7 @@ func _ready() -> void:
 	view = IslandView.new()
 	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	view.region_tapped.connect(_on_region)
+	view.chest_tapped.connect(_on_chest)
 	col.add_child(view)
 
 
@@ -25,6 +26,24 @@ func _on_region(r: int) -> void:
 		view.toast(r, "Coming soon")
 
 
+func _on_chest(c: int) -> void:
+	var chest: Dictionary = Levels.CHESTS[c]
+	var id := Levels.chest_id(c)
+	var need := int(chest["stars"])
+	var have := Save.region_stars(int(chest["region"]))
+	if Save.chest_opened(id):
+		view.toast(100 + c, "Already opened")
+	elif have < need:
+		view.toast(100 + c, "%d / %d stars" % [have, need])
+	else:
+		var given := Save.open_chest(id, chest["reward"])
+		view.toast(100 + c, GameScreen._reward_text(given).replace("Streak reward: ", ""), 2.6)
+		view.burst(c)
+		Sfx.play("coin")
+		Sfx.play_later("win", 0.15)
+		Sfx.vibrate(60, true, 0.9)
+
+
 func go_back() -> void:
 	router.show_menu()
 
@@ -32,6 +51,7 @@ func go_back() -> void:
 ## The drawn island. Everything is generated from a fixed seed, so the map never changes.
 class IslandView extends Control:
 	signal region_tapped(r: int)
+	signal chest_tapped(c: int)
 
 	const SEA_TOP := Color("1f6fb8")
 	const SEA_BOTTOM := Color("0d3b74")
@@ -90,8 +110,15 @@ class IslandView extends Control:
 				toasts.erase(r)
 		queue_redraw()
 
-	func toast(r: int, text: String) -> void:
-		toasts[r] = 1.6
+	var bursts := {}
+
+	## Light burst when a chest opens.
+	func burst(c: int) -> void:
+		bursts[c] = t
+
+	## Keys below 100 are regions, 100 and up are chests.
+	func toast(r: int, text: String, seconds := 1.6) -> void:
+		toasts[r] = seconds
 		set_meta("toast_%d" % r, text)
 		Sfx.play("tap", 0.8)
 		Sfx.vibrate(12, false, 0.4)
@@ -115,6 +142,11 @@ class IslandView extends Control:
 			pos = touch.position
 		if pos == Vector2.INF:
 			return
+		for c in Levels.CHESTS.size():
+			if pos.distance_to(_xf(Levels.CHESTS[c]["pos"])) < 44.0 * _unit():
+				accept_event()
+				chest_tapped.emit(c)
+				return
 		var best := -1
 		var best_d := 110.0 * _unit()
 		for i in Levels.REGIONS.size():
@@ -148,6 +180,9 @@ class IslandView extends Control:
 				_draw_fog(i, u)
 		for i in Levels.REGIONS.size():
 			_draw_badge(i, u)
+		_draw_islet(u)
+		for c in Levels.CHESTS.size():
+			_draw_chest(c, u)
 		_draw_boat(u)
 
 	func _poly(unit_pts: PackedVector2Array, offset := Vector2.ZERO, grow := 1.0, center := Vector2(0.5, 0.47)) -> PackedVector2Array:
@@ -275,8 +310,63 @@ class IslandView extends Control:
 			var a := clampf(toasts[i] / 0.3, 0.0, 1.0)
 			_pill(str(get_meta("toast_%d" % i, "")), c + Vector2(0, -50 * u), 24.0 * u, Color(Color.WHITE, a), Color(INK, a))
 
+	## Small sandbar that holds the treasure chests.
+	func _draw_islet(u: float) -> void:
+		var pts := PackedVector2Array()
+		var c := Vector2(0.58, 1.05)
+		for k in 32:
+			var a := TAU * k / 32.0
+			pts.append(c + Vector2(cos(a) * 0.29, sin(a) * 0.06 * (1.0 + 0.15 * sin(a * 3.0))))
+		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.12, c), Color(0.45, 0.85, 0.95, 0.35))
+		draw_colored_polygon(_poly(pts, Vector2(0, 8 * u), 1.0, c), SAND.darkened(0.25))
+		draw_colored_polygon(_poly(pts, Vector2.ZERO, 1.0, c), SAND)
+
+	func _draw_chest(c: int, u: float) -> void:
+		var chest: Dictionary = Levels.CHESTS[c]
+		var p := _xf(chest["pos"])
+		var r := int(chest["region"])
+		if not Levels.region_open(r):
+			return
+		var opened := Save.chest_opened(Levels.chest_id(c))
+		var ready := not opened and Save.region_stars(r) >= int(chest["stars"])
+		var s := u * (1.0 + 0.06 * sin(t * 5.0) if ready else u)
+		if ready:
+			BlockArt.draw_glow(self, p, 70.0 * u, Color(1, 0.85, 0.3, 0.5 + 0.2 * sin(t * 4.0)))
+		if bursts.has(c) and t - float(bursts[c]) < 0.8:
+			var k := (t - float(bursts[c])) / 0.8
+			BlockArt.draw_glow(self, p, (60.0 + 140.0 * k) * u, Color(1, 0.9, 0.5, 0.8 * (1.0 - k)))
+		var wood := Color("b0703a") if not opened else Color("8a5a2b")
+		draw_rect(Rect2(p + Vector2(-22, -4) * s, Vector2(44, 26) * s), Color(0, 0, 0, 0.25))
+		draw_rect(Rect2(p + Vector2(-22, -8) * s, Vector2(44, 26) * s), wood)
+		if opened:
+			# Lid flipped back, empty inside.
+			draw_rect(Rect2(p + Vector2(-20, -6) * s, Vector2(40, 6) * s), Color("3a2412"))
+			draw_rect(Rect2(p + Vector2(-22, -26) * s, Vector2(44, 12) * s), wood.darkened(0.2))
+		else:
+			draw_rect(Rect2(p + Vector2(-24, -20) * s, Vector2(48, 14) * s), wood.lightened(0.1))
+			draw_rect(Rect2(p + Vector2(-24, -9) * s, Vector2(48, 4) * s), Color("ffd23f"))
+			draw_rect(Rect2(p + Vector2(-5, -12) * s, Vector2(10, 12) * s), Color("ffd23f"))
+		# Star cost tag underneath.
+		var tag := "Open" if ready else ("Done" if opened else str(int(chest["stars"])))
+		_pill(tag, p + Vector2(0, 38 * u), 20.0 * u, Color(INK, 0.85) if not ready else Color("ffd23f"), Color.WHITE if not ready else INK)
+		if not ready and not opened:
+			_star(p + Vector2(-_tag_w(tag, 20.0 * u) / 2.0 - 10.0 * u, 38 * u), 9.0 * u)
+		if toasts.has(100 + c):
+			var a := clampf(toasts[100 + c] / 0.3, 0.0, 1.0)
+			_pill(str(get_meta("toast_%d" % (100 + c), "")), p + Vector2(clampf(0.0, -p.x + 160 * u, size.x - p.x - 160 * u), -46 * u), 22.0 * u, Color(Color.WHITE, a), Color(INK, a))
+
+	func _tag_w(s: String, fs: float) -> float:
+		return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs)).x + fs * 1.2
+
+	func _star(c: Vector2, r: float) -> void:
+		var pts := PackedVector2Array()
+		for k in 10:
+			var a := -PI / 2.0 + k * PI / 5.0
+			pts.append(c + Vector2(cos(a), sin(a)) * (r if k % 2 == 0 else r * 0.45))
+		draw_colored_polygon(pts, Color("ffd23f"))
+
 	func _draw_boat(u: float) -> void:
-		var p := Vector2(size.x * (0.12 + 0.03 * sin(t * 0.3)), size.y * 0.9 + sin(t * 1.6) * 3.0 * u)
+		var p := Vector2(size.x * (0.16 + 0.03 * sin(t * 0.3)), size.y * 0.11 + sin(t * 1.6) * 3.0 * u)
 		var rock := sin(t * 1.6) * 0.06
 		draw_set_transform(p, rock, Vector2.ONE)
 		draw_colored_polygon(PackedVector2Array([Vector2(-28, 0) * u, Vector2(28, 0) * u, Vector2(18, 12) * u, Vector2(-18, 12) * u]), Color("8a5a2b"))

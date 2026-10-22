@@ -406,10 +406,27 @@ func _end_daily() -> void:
 	var body: Array = [["Score", 26, c_muted], [UI.fmt(s), 84, Color.WHITE]]
 	body.append(["New best today!" if is_best and not first else "Today's best " + UI.fmt(Save.daily_best()), 30, c_gold])
 	body.append(["+%d coins" % (_run_coins() + bonus), 28, c_gold])
+	var reward := Save.note_daily_played()
+	var st := Save.streak()
+	body.append(["Streak: %d day%s in a row" % [st, "" if st == 1 else "s"], 30, Color.WHITE])
+	if not reward.is_empty():
+		body.append([_reward_text(reward), 28, c_gold])
 	_dialog("end", "Daily done", body, [
 		["Try again", c_purple, func() -> void: _finish_run(func() -> void: router.start_game("daily"), bonus)],
 		["Menu", c_panel, func() -> void: _finish_run(func() -> void: router.show_menu(), bonus)],
 	])
+
+
+static func _reward_text(r: Dictionary) -> String:
+	var parts: Array = []
+	for k in r:
+		if k == "coins":
+			parts.append("+%d coins" % int(r[k]))
+		elif k == "theme":
+			parts.append("%s theme" % str(Themes.get_theme(str(r[k]))["name"]))
+		else:
+			parts.append("+%d %s" % [int(r[k]), k])
+	return "Streak reward: " + ", ".join(parts)
 
 
 func _end_level_win() -> void:
