@@ -152,3 +152,44 @@ static func safe_insets(ctrl: Control) -> Vector2:
 		return Vector2.ZERO
 	var k := ctrl.get_viewport_rect().size.y / float(screen.y)
 	return Vector2(safe.position.y * k, (screen.y - safe.end.y) * k)
+
+
+## Makes a ScrollContainer drag smoothly with a finger even when the drag starts on a button,
+## and stops that button from firing once the list has started moving.
+static func touch_scroll(scroll: ScrollContainer) -> void:
+	scroll.scroll_deadzone = 18
+	scroll.add_child(TouchScroll.new(), false, Node.INTERNAL_MODE_FRONT)
+
+
+class TouchScroll extends Node:
+	var scroll: ScrollContainer
+
+	func _ready() -> void:
+		scroll = get_parent()
+		get_tree().node_added.connect(_on_node_added)
+		scroll.scroll_started.connect(_cancel_presses)
+		_pass_all(scroll)
+
+	func _on_node_added(n: Node) -> void:
+		if n is Control and scroll.is_ancestor_of(n):
+			_pass_all(n)
+
+	## Controls that stop mouse events would keep the drag from reaching the scroll container.
+	func _pass_all(n: Node) -> void:
+		if n != scroll and n is Control and (n as Control).mouse_filter == Control.MOUSE_FILTER_STOP:
+			(n as Control).mouse_filter = Control.MOUSE_FILTER_PASS
+		for c in n.get_children():
+			_pass_all(c)
+
+	## Toggling disabled clears a button's half-finished press, so lifting the finger does nothing.
+	func _cancel_presses() -> void:
+		_cancel(scroll)
+
+	func _cancel(n: Node) -> void:
+		var b := n as BaseButton
+		if b != null and not b.disabled:
+			b.disabled = true
+			b.disabled = false
+			b.scale = Vector2.ONE
+		for c in n.get_children():
+			_cancel(c)

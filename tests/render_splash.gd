@@ -2,7 +2,10 @@
 ## Renders the boot splash ("Prism Blocks by BDS Labs") to res://splash.png.
 ## Run windowed: godot --path . res://tests/render_splash.tscn
 
-const SIZE := Vector2i(1080, 1920)
+# 20:9, like most current phones. The background is one flat color equal to
+# boot_splash/bg_color, so on any other screen shape the extra space blends in.
+const SIZE := Vector2i(1080, 2400)
+const BG := Color(0.055, 0.043, 0.161)
 
 
 func _ready() -> void:
@@ -24,20 +27,16 @@ func _ready() -> void:
 class SplashArt extends Control:
 	func _draw() -> void:
 		var th := Themes.get_theme("midnight")
-		var top: Color = th["top"]
-		var bottom: Color = th["bottom"]
-		draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)]),
-			PackedColorArray([top, top, bottom, bottom]))
+		draw_rect(Rect2(Vector2.ZERO, size), BG)
 		var pal: Array = th["blocks"]
-		BlockArt.draw_glow(self, Vector2(size.x * 0.5, size.y * 0.4), size.x * 0.75, Color(pal[6], 0.16))
-		BlockArt.draw_glow(self, Vector2(size.x * 0.2, size.y * 0.75), size.x * 0.6, Color(pal[4], 0.08))
-		BlockArt.draw_glow(self, Vector2(size.x * 0.85, size.y * 0.15), size.x * 0.5, Color(pal[0], 0.08))
+		# Soft glow kept well inside the edges, so the border stays exactly BG.
+		BlockArt.draw_glow(self, Vector2(size.x * 0.5, size.y * 0.42), size.x * 0.48, Color(pal[6], 0.22))
 
 		# Logo: a small cluster of gem blocks.
 		var cells := [Vector2(-1.5, -1), Vector2(-0.5, -1), Vector2(0.5, -1), Vector2(-0.5, 0), Vector2(0.5, 0),
 			Vector2(1.5, 0), Vector2(-1.5, 1), Vector2(0.5, 1), Vector2(1.5, 1)]
 		var s := size.x * 0.13
-		var c0 := Vector2(size.x / 2.0, size.y * 0.36)
+		var c0 := Vector2(size.x / 2.0, size.y * 0.38)
 		for i in cells.size():
 			var p: Vector2 = cells[i]
 			BlockArt.draw_shadow(self, c0 + p * s * 1.04, s, 0.35)
@@ -45,8 +44,8 @@ class SplashArt extends Control:
 
 		var font := UI.display_font()
 		var w := size.x
-		var ty := size.y * 0.58
-		draw_string_outline(font, Vector2(0, ty + 10), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 124, 30, Color(0, 0, 0, 0.35))
-		draw_string_outline(font, Vector2(0, ty), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 124, 26, UI.INK)
-		draw_string(font, Vector2(0, ty), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 124, Color("ffd23f"))
-		draw_string(font, Vector2(0, size.y * 0.88), "by BDS Labs", HORIZONTAL_ALIGNMENT_CENTER, w, 56, Color(1, 1, 1, 0.75))
+		var ty := size.y * 0.54
+		draw_string_outline(font, Vector2(0, ty + 10), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 160, 36, Color(0, 0, 0, 0.35))
+		draw_string_outline(font, Vector2(0, ty), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 160, 32, UI.INK)
+		draw_string(font, Vector2(0, ty), "Prism Blocks", HORIZONTAL_ALIGNMENT_CENTER, w, 160, Color("ffd23f"))
+		draw_string(font, Vector2(0, size.y * 0.84), "by BDS Labs", HORIZONTAL_ALIGNMENT_CENTER, w, 64, Color(1, 1, 1, 0.75))

@@ -10,6 +10,7 @@ func _ready() -> void:
 	var col := Screens.frame(self, "Credits", func() -> void: router.show_settings())
 
 	var scroll := ScrollContainer.new()
+	UI.touch_scroll(scroll)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	col.add_child(scroll)
