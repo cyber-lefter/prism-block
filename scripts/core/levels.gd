@@ -45,7 +45,7 @@ static func goal_text(lv: Dictionary) -> String:
 		"gems":
 			return "Collect all %d gems" % int(lv["target"])
 		"ice":
-			return "Break all %d ice blocks" % int(lv["target"])
+			return "Break the ice on %d blocks" % int(lv["target"])
 	return ""
 
 
@@ -54,13 +54,13 @@ static func _intro(n: int) -> String:
 		1:
 			return "Fill a row or column to clear it."
 		6:
-			return "New: Ice. A frozen block needs its line cleared one extra time."
+			return "New: Ice. Clear a line through a frozen block to break its ice. The block stays, now unfrozen."
 		11:
 			return "New: Stone. Stones count toward full lines but never break."
 		16:
 			return "New: Bombs. A bomb in a cleared line blasts the 3x3 area around it."
 		30:
-			return "New: Thick ice needs two extra clears."
+			return "New: Thick ice. It takes two line clears to break."
 	return ""
 
 
